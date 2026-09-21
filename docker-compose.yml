@@ -1,0 +1,45 @@
+services:
+  opencode:
+    build:
+      context: .
+    init: true
+    command:
+      - web
+      - --hostname
+      - 0.0.0.0
+      - --port
+      - "4096"
+      - --cors
+      - https://localhost:4096
+      - --cors
+      - https://127.0.0.1:4096
+    volumes:
+      - workspace:/workspace
+      - opencode-data:/home/node/.local/share/opencode
+    restart: unless-stopped
+
+  https:
+    image: caddy:2.11.2-alpine
+    ports:
+      - "127.0.0.1:4096:443"
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./certs
+        target: /certs
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      opencode:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  workspace:
+  opencode-data:

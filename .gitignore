@@ -1,0 +1,9 @@
+/certs/*
+!/certs/.gitkeep
+/config.json
+/.build/
+/public/
+/dist/
+/node_modules/
+*.log
+.DS_Store

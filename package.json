@@ -1,0 +1,14 @@
+{
+  "name": "empty-opencode-web",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "A portable local OpenCode Web launcher with optional HTTPS and backend proxying.",
+  "engines": { "node": ">=10.15.0" },
+  "scripts": {
+    "start": "node server.js",
+    "build:ui": "node scripts/build-ui.js",
+    "test": "node --test test/server.test.js",
+    "release": "node scripts/release.js"
+  }
+}
