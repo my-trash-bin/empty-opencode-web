@@ -11,7 +11,7 @@ UI and backend version: **1.18.31**, commit `014614d35b397775e5d397a490fc72368c8
 | Portable UI + remote backend | Node.js and portable bundle | Remote server |
 | Portable UI + local backend | Node.js and OpenCode 1.18.31 | Your Linux/macOS/Windows host |
 | Android (Termux recommended) | Termux, Node.js, portable bundle | Remote server |
-| Docker | Docker Compose and mkcert | OpenCode container |
+| Docker | Docker Compose v2 and mkcert | OpenCode container |
 
 The portable runtime has zero npm dependencies. Use a current Node.js LTS release. Runtime source also targets Node.js 10.15+ for legacy compatibility; build/test tools need Node.js 22 and Bun 1.3.14. Modern browser support is a separate requirement.
 
@@ -100,16 +100,39 @@ Options: `--http`, `--port NUMBER`, `--upstream URL`, `--config FILE`, `--help`.
 
 ## Docker (optional)
 
-From a source checkout, the existing Docker configuration runs independently of the portable launcher. It uses OpenCode 1.18.31 with its matching embedded UI and a Caddy TLS proxy. Generate certificates as above, then:
+From a source checkout, the Docker configuration runs independently of the portable launcher. It uses OpenCode 1.18.31 with its matching embedded UI and a Caddy TLS proxy. Install [Docker](https://docs.docker.com/engine/install/) and [mkcert](https://github.com/FiloSottile/mkcert), make sure Docker is running, then run the environment's one-click recipe from Git Bash (Windows) or a terminal (macOS/Linux):
 
 ```sh
-docker compose up -d --build
+just start
+```
+
+Running `just` without a recipe lists the available commands. `just start` and `just docker` are equivalent. Arguments after the recipe name are forwarded to the environment script, for example:
+
+```sh
+just docker --no-start
+just docker --force-certs
+just docker --project-name my-project
+```
+
+The current repository has a Docker environment script; Android and other environment-specific recipes can be added later using the same pattern. If `just` is unavailable, invoke that script directly:
+
+```sh
+sh scripts/setup-docker.sh
+```
+
+The script installs the mkcert local CA trust (an operating-system confirmation may appear), creates the localhost certificate, validates the Compose configuration, and builds and starts the `empty-opencode-web` project. It is safe to rerun and reuses existing certificate files. Use `--force-certs` to replace them, `--no-start` to only prepare and validate, or `--project-name NAME` to override the project name for that run.
+
+Access <https://localhost:4096>. Only loopback HTTPS is published. Windows users should run the script in Git Bash; no Windows-specific script is required.
+
+Common management commands are:
+
+```sh
 docker compose ps
 docker compose logs -f opencode https
 docker compose down
 ```
 
-Access <https://localhost:4096>. Only loopback HTTPS is published. Workspace and OpenCode data persist in named volumes; host credentials are not mounted. `docker compose down -v` permanently deletes those volumes. With mise, prefix commands with `mise exec --`.
+Workspace and OpenCode data persist in named volumes; host credentials are not mounted. `docker compose down -v` permanently deletes those volumes. This repository's `mise.toml` can install `just` and `mkcert` with `mise install`. When using mise without shell activation, run `mise exec -- just`; prefix direct Docker commands with `mise exec --` as needed.
 
 ## Build and package
 

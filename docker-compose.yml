@@ -1,3 +1,5 @@
+name: empty-opencode-web
+
 services:
   opencode:
     build:
