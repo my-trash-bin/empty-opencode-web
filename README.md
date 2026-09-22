@@ -148,6 +148,34 @@ The build verifies the upstream commit and frozen lockfile, builds the official 
 
 Packaging uses an allowlist and produces `dist/empty-opencode-web-1.18.31/` and a `.tar.gz`. GitHub Actions tests Linux/macOS/Windows and uploads a downloadable ZIP artifact. It does not publish a GitHub Release. See [Contributing](CONTRIBUTING.md).
 
+## Versioned GitHub Pages
+
+GitHub Pages can host immutable UI builds that connect directly to an external OpenCode server over HTTPS/WSS. The server must allow the Pages origin with OpenCode's CORS setting; server exposure, TLS, and authentication are managed on the server side.
+
+The managed version remains explicit in `upstream.json`. Set `pages.json.repositoryPath` to the GitHub repository name and keep `defaultVersion` on a version that will exist in the Pages branch. Build the pinned version with:
+
+```sh
+just pages-build
+```
+
+This produces `dist/pages/v/<version>/` with a Vite base of `/<repository>/v/<version>/` and hash-based client routing. Each version therefore has a stable URL such as:
+
+```text
+https://<owner>.github.io/<repository>/v/1.18.31/#/
+```
+
+Keep generated artifacts on a separate `gh-pages` branch. Check it out as a worktree, then stage the new version:
+
+```sh
+git worktree add .pages-worktree gh-pages
+just pages-stage .pages-worktree
+git -C .pages-worktree status
+```
+
+The staging command creates the root redirect, `.nojekyll`, and `versions.json`. It refuses to overwrite an existing version directory, so previously published builds do not need to be rebuilt. Review and commit the generated files in the `gh-pages` worktree, push that branch, and configure repository Pages settings to deploy from the branch root.
+
+Pages is served over HTTPS, so normal remote `http://` and `ws://` server URLs are blocked by browser mixed-content rules. Use an `https://` server URL (and its corresponding secure WebSocket connection). CORS accepts an origin, not a path, so allow `https://<owner>.github.io` even though the UI is under a repository and version prefix.
+
 See [Validation record](docs/validation.md) for completed checks and untested device combinations.
 
 ## Troubleshooting

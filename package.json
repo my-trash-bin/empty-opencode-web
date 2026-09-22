@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "build:ui": "node scripts/build-ui.js",
+    "build:pages": "node scripts/build-pages.js",
     "test": "node --test test/server.test.js",
     "release": "node scripts/release.js"
   }
