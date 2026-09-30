@@ -24,9 +24,51 @@ if (pagesBase && (!/^\/[A-Za-z0-9._~/-]+\/$/.test(pagesBase) || pagesBase.includ
 run('bun', ['install', '--frozen-lockfile', '--ignore-scripts'], source);
 const appDirectory = path.join(source, 'packages', 'app');
 const appSource = path.join(appDirectory, 'src', 'app.tsx');
+const entrySource = path.join(appDirectory, 'src', 'entry.tsx');
 let originalApp;
+let originalEntry;
 try {
   const buildArgs = ['run', 'build'];
+  originalEntry = fs.readFileSync(entrySource, 'utf8');
+  let patchedEntry = originalEntry.replace(
+    'const getDefaultUrl = () => {\n  const lsDefault = readDefaultServerUrl()\n  if (lsDefault) return lsDefault\n  return getCurrentUrl()\n}',
+    `const getDefaultUrl = (hasLauncherBackend: boolean) => {
+  const lsDefault = readDefaultServerUrl()
+  if (lsDefault) return lsDefault
+  if (hasLauncherBackend) return getCurrentUrl()
+  return "opencode://unconfigured"
+}
+
+// A portable/static build has no implicit API server. Only register the page
+// origin when the launcher explicitly reports that its backend proxy is on.
+const hasLauncherBackend = async () => {
+  try {
+    const response = await fetch(new URL("/__launcher/health", location.origin), {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(2000),
+    })
+    if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) return false
+    const status = await response.json()
+    return status?.healthy === true && status?.upstream === true
+  } catch {
+    return false
+  }
+}`,
+  );
+  patchedEntry = patchedEntry.replace(
+    'void loadInitialLocale().then((locale) => {',
+    'void Promise.all([loadInitialLocale(), hasLauncherBackend()]).then(([locale, launcherBackend]) => {',
+  );
+  patchedEntry = patchedEntry.replace(
+    'defaultServer={ServerConnection.Key.make(getDefaultUrl())}\n              canonicalLocalServer={ServerConnection.key(server)}\n              servers={[server]}',
+    'defaultServer={ServerConnection.Key.make(getDefaultUrl(launcherBackend))}\n              canonicalLocalServer={ServerConnection.key(server)}\n              servers={launcherBackend ? [server] : []}',
+  );
+  if (patchedEntry === originalEntry ||
+      !patchedEntry.includes('servers={launcherBackend ? [server] : []}') ||
+      !patchedEntry.includes('hasLauncherBackend()')) {
+    throw new Error('The pinned OpenCode entry point no longer matches the backend adapter.');
+  }
+  fs.writeFileSync(entrySource, patchedEntry);
   if (pagesBase) {
     originalApp = fs.readFileSync(appSource, 'utf8');
     let patched = originalApp.replace('  Navigate,\n  Route,', '  HashRouter,\n  Navigate,\n  Route,');
@@ -40,6 +82,7 @@ try {
   run('bun', buildArgs, appDirectory);
 } finally {
   if (originalApp !== undefined) fs.writeFileSync(appSource, originalApp);
+  if (originalEntry !== undefined) fs.writeFileSync(entrySource, originalEntry);
 }
 fs.rmSync(output, { recursive: true, force: true });
 fs.cpSync(path.join(source, 'packages', 'app', 'dist'), output, { recursive: true, filter: file => !file.endsWith('.map') });

@@ -74,6 +74,7 @@ function createServer(config, publicDir) {
     catch (_) { return reply(res, 400, 'Invalid URL'); }
     if (pathname === '/__launcher/health') {
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store');
       return res.end(JSON.stringify({ healthy: true, version: require('./upstream.json').version, upstream: !!upstream }));
     }
     if (api.test(pathname)) {

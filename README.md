@@ -25,6 +25,8 @@ node server.js --http
 
 Open <http://127.0.0.1:4096> and add your remote OpenCode server through the UI's server selector. Without a backend, the default local server is intentionally unavailable; this launcher does not simulate the OpenCode API. For HTTPS follow the next section. Add `--port 4097` if another service already uses 4096.
 
+The UI checks the launcher's status once at startup and registers its own origin as an OpenCode server only when `upstream` is configured. In UI-only and GitHub Pages builds it stays disconnected until you select or add a remote server, avoiding repeated API requests to the static host.
+
 ### HTTPS
 
 Install [mkcert](https://github.com/FiloSottile/mkcert) on your desktop, then run from the extracted directory:

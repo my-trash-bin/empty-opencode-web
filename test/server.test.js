@@ -34,7 +34,9 @@ test('serves SPA deep links and WASM, rejects missing assets and private paths',
 test('does not report an absent backend as healthy', async t => {
   const base = await fixture(t);
   assert.equal((await fetch(base + '/global/health')).status, 503);
-  assert.equal((await (await fetch(base + '/__launcher/health')).json()).healthy, true);
+  const health = await fetch(base + '/__launcher/health');
+  assert.equal(health.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await health.json(), { healthy: true, version: require('../upstream.json').version, upstream: false });
 });
 
 test('proxies API bodies, Origin, status and streaming responses', async t => {
@@ -53,6 +55,7 @@ test('proxies API bodies, Origin, status and streaming responses', async t => {
   await new Promise(resolve => backend.listen(0, '127.0.0.1', resolve));
   t.after(() => { backend.closeAllConnections(); backend.close(); });
   const base = await fixture(t, 'http://127.0.0.1:' + backend.address().port);
+  assert.equal((await (await fetch(base + '/__launcher/health')).json()).upstream, true);
   const response = await fetch(base + '/pty?directory=%2Fworkspace', { method: 'POST', headers: { Origin: base }, body: '{"title":"test"}' });
   assert.equal(response.status, 201);
   assert.deepEqual(await response.json(), { body: '{"title":"test"}', origin: base, url: '/pty?directory=%2Fworkspace' });
