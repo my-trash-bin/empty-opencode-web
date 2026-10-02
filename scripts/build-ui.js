@@ -42,6 +42,9 @@ try {
 // A portable/static build has no implicit API server. Only register the page
 // origin when the launcher explicitly reports that its backend proxy is on.
 const hasLauncherBackend = async () => {
+  // Versioned Pages builds have no launcher endpoint. Avoid even a one-off
+  // health request to the static host.
+  if (import.meta.env.BASE_URL !== "/") return false
   try {
     const response = await fetch(new URL("/__launcher/health", location.origin), {
       headers: { accept: "application/json" },

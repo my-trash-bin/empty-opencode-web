@@ -174,7 +174,7 @@ just pages-stage .pages-worktree
 git -C .pages-worktree status
 ```
 
-The staging command creates the root redirect, `.nojekyll`, and `versions.json`. It refuses to overwrite an existing version directory, so previously published builds do not need to be rebuilt. Review and commit the generated files in the `gh-pages` worktree, push that branch, and configure repository Pages settings to deploy from the branch root.
+The staging command creates the root redirect, `.nojekyll`, and `versions.json`. If the version already exists, it replaces only that version directory with the latest build; other published versions remain untouched. This allows launcher and packaging fixes to be published without changing the pinned OpenCode version. Review and commit the generated files in the `gh-pages` worktree, push that branch, and configure repository Pages settings to deploy from the branch root.
 
 Pages is served over HTTPS, so normal remote `http://` and `ws://` server URLs are blocked by browser mixed-content rules. Use an `https://` server URL (and its corresponding secure WebSocket connection). CORS accepts an origin, not a path, so allow `https://<owner>.github.io` even though the UI is under a repository and version prefix.
 
