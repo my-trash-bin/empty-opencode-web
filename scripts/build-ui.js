@@ -76,49 +76,27 @@ const hasLauncherBackend = async () => {
   fs.writeFileSync(entrySource, patchedEntry);
   originalApp = fs.readFileSync(appSource, 'utf8');
   let patched = originalApp.replace(
-    'import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"',
-    'import { normalizeServerUrl, ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"',
+    'import { DialogProvider } from "@opencode-ai/ui/context/dialog"',
+    'import { DialogProvider, useDialog } from "@opencode-ai/ui/context/dialog"',
+  );
+  patched = patched.replace(
+    'import { CommandProvider, useCommand, type CommandOption } from "@/context/command"',
+    'import { CommandProvider, useCommand, type CommandOption } from "@/context/command"\nimport { DialogSelectServer } from "@/components/dialog-select-server"',
   );
   patched = patched.replace(
     'export function AppInterface(props: {',
     `function DisconnectedServer() {
+  const dialog = useDialog()
   const language = useLanguage()
-  const server = useServer()
-  const checkServerHealth = useCheckServerHealth()
-  const [url, setUrl] = createSignal("")
-  const [error, setError] = createSignal("")
-
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault()
-    const normalized = normalizeServerUrl(url())
-    if (!normalized) return
-    setError("")
-    const http = { url: normalized }
-    if (!(await checkServerHealth(http)).healthy) {
-      setError(language.t("dialog.server.add.error"))
-      return
-    }
-    server.add({ type: "http", http })
-  }
-
   return (
     <div class="h-full w-full flex items-center justify-center">
-      <form class="flex flex-col gap-3 w-full max-w-sm" onSubmit={submit}>
-        <label class="text-14-medium text-text-strong" for="disconnected-server-url">
-          {language.t("dialog.server.add.url")}
-        </label>
-        <input
-          id="disconnected-server-url"
-          class="px-3 py-2 rounded-md border border-border-base bg-background-base text-text-strong"
-          placeholder={language.t("dialog.server.add.placeholder")}
-          value={url()}
-          onInput={(event) => setUrl(event.currentTarget.value)}
-        />
-        <Show when={error()}><p class="text-12-regular text-icon-critical-base">{error()}</p></Show>
-        <button type="submit" class="px-4 py-2 rounded-md bg-surface-raised-base hover:bg-surface-raised-base-hover text-text-strong">
-          {language.t("dialog.server.add.button")}
-        </button>
-      </form>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-md bg-surface-raised-base hover:bg-surface-raised-base-hover text-text-strong"
+        onClick={() => dialog.show(() => <DialogSelectServer />)}
+      >
+        {language.t("dialog.server.add.button")}
+      </button>
     </div>
   )
 }
@@ -127,18 +105,35 @@ export function AppInterface(props: {`,
   );
   patched = patched.replace('<Show when={server.key} keyed>', '<Show when={server.current} keyed>');
   patched = patched.replace(
-    '          <ConnectionGate disableHealthCheck={props.disableHealthCheck} startup={props.startup}>\n            <Show when={useSettings().general.newLayoutDesigns().toString()} keyed>',
-    '          <ConnectionGate disableHealthCheck={props.disableHealthCheck} startup={props.startup}>\n            <Show when={useServer().current} fallback={<DisconnectedServer />}>\n              <Show when={useSettings().general.newLayoutDesigns().toString()} keyed>',
+    '                          <Show when={useSettings().general.newLayoutDesigns()} fallback={routerProps.children}>\n                            <NewAppLayout serverScoped={props.serverScoped}>{routerProps.children}</NewAppLayout>\n                          </Show>',
+    `                          <Show when={useServer().current} fallback={routerProps.children}>
+                            <Show when={useSettings().general.newLayoutDesigns()} fallback={routerProps.children}>
+                              <NewAppLayout serverScoped={props.serverScoped}>{routerProps.children}</NewAppLayout>
+                            </Show>
+                          </Show>`,
   );
-  patched = patched.replace(
-    '            </Show>\n          </ConnectionGate>',
-    '              </Show>\n            </Show>\n          </ConnectionGate>',
+  const routesStart = patched.indexOf('function Routes(');
+  if (routesStart === -1) throw new Error('The pinned OpenCode routes were not found.');
+  let routes = patched.slice(routesStart);
+  routes = routes.replace(
+    '  return (\n    <>',
+    '  return (\n    <Show when={useServer().current} fallback={<Route path="*" component={DisconnectedServer} />}>\n      <>',
   );
+  routes = routes.replace(
+    '      <Route path="/new-session" component={DraftRoute} />\n    </>\n  )\n}\n\nfunction NewLayoutLegacySessionRedirect',
+    '      <Route path="/new-session" component={DraftRoute} />\n      </>\n    </Show>\n  )\n}\n\nfunction NewLayoutLegacySessionRedirect',
+  );
+  patched = patched.slice(0, routesStart) + routes;
   if (patched === originalApp ||
-      !patched.includes('fallback={<DisconnectedServer />}') ||
-      !patched.includes('server.add({ type: "http", http })') ||
+      !patched.includes('component={DisconnectedServer}') ||
+      !patched.includes('<DialogSelectServer />') ||
       !patched.includes('<Show when={server.current} keyed>')) {
-    throw new Error('The pinned OpenCode app no longer matches the disconnected-server adapter.');
+    throw new Error('The pinned OpenCode app no longer matches the disconnected-server adapter: ' + JSON.stringify({
+      changed: patched !== originalApp,
+      fallback: patched.includes('component={DisconnectedServer}'),
+      dialog: patched.includes('<DialogSelectServer />'),
+      current: patched.includes('<Show when={server.current} keyed>'),
+    }));
   }
   if (pagesBase) {
     patched = patched.replace('  Navigate,\n  Route,', '  HashRouter,\n  Navigate,\n  Route,');
