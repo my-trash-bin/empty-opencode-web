@@ -36,6 +36,7 @@ try {
   const lsDefault = readDefaultServerUrl()
   if (lsDefault) return lsDefault
   if (hasLauncherBackend) return getCurrentUrl()
+  // Keep the provider initialized while server.current remains empty.
   return "opencode://unconfigured"
 }
 
@@ -68,20 +69,86 @@ const hasLauncherBackend = async () => {
   );
   if (patchedEntry === originalEntry ||
       !patchedEntry.includes('servers={launcherBackend ? [server] : []}') ||
-      !patchedEntry.includes('hasLauncherBackend()')) {
+      !patchedEntry.includes('hasLauncherBackend()') ||
+      !patchedEntry.includes('opencode://unconfigured')) {
     throw new Error('The pinned OpenCode entry point no longer matches the backend adapter.');
   }
   fs.writeFileSync(entrySource, patchedEntry);
+  originalApp = fs.readFileSync(appSource, 'utf8');
+  let patched = originalApp.replace(
+    'import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"',
+    'import { normalizeServerUrl, ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"',
+  );
+  patched = patched.replace(
+    'export function AppInterface(props: {',
+    `function DisconnectedServer() {
+  const language = useLanguage()
+  const server = useServer()
+  const checkServerHealth = useCheckServerHealth()
+  const [url, setUrl] = createSignal("")
+  const [error, setError] = createSignal("")
+
+  const submit = async (event: SubmitEvent) => {
+    event.preventDefault()
+    const normalized = normalizeServerUrl(url())
+    if (!normalized) return
+    setError("")
+    const http = { url: normalized }
+    if (!(await checkServerHealth(http)).healthy) {
+      setError(language.t("dialog.server.add.error"))
+      return
+    }
+    server.add({ type: "http", http })
+  }
+
+  return (
+    <div class="h-full w-full flex items-center justify-center">
+      <form class="flex flex-col gap-3 w-full max-w-sm" onSubmit={submit}>
+        <label class="text-14-medium text-text-strong" for="disconnected-server-url">
+          {language.t("dialog.server.add.url")}
+        </label>
+        <input
+          id="disconnected-server-url"
+          class="px-3 py-2 rounded-md border border-border-base bg-background-base text-text-strong"
+          placeholder={language.t("dialog.server.add.placeholder")}
+          value={url()}
+          onInput={(event) => setUrl(event.currentTarget.value)}
+        />
+        <Show when={error()}><p class="text-12-regular text-icon-critical-base">{error()}</p></Show>
+        <button type="submit" class="px-4 py-2 rounded-md bg-surface-raised-base hover:bg-surface-raised-base-hover text-text-strong">
+          {language.t("dialog.server.add.button")}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+export function AppInterface(props: {`,
+  );
+  patched = patched.replace('<Show when={server.key} keyed>', '<Show when={server.current} keyed>');
+  patched = patched.replace(
+    '          <ConnectionGate disableHealthCheck={props.disableHealthCheck} startup={props.startup}>\n            <Show when={useSettings().general.newLayoutDesigns().toString()} keyed>',
+    '          <ConnectionGate disableHealthCheck={props.disableHealthCheck} startup={props.startup}>\n            <Show when={useServer().current} fallback={<DisconnectedServer />}>\n              <Show when={useSettings().general.newLayoutDesigns().toString()} keyed>',
+  );
+  patched = patched.replace(
+    '            </Show>\n          </ConnectionGate>',
+    '              </Show>\n            </Show>\n          </ConnectionGate>',
+  );
+  if (patched === originalApp ||
+      !patched.includes('fallback={<DisconnectedServer />}') ||
+      !patched.includes('server.add({ type: "http", http })') ||
+      !patched.includes('<Show when={server.current} keyed>')) {
+    throw new Error('The pinned OpenCode app no longer matches the disconnected-server adapter.');
+  }
   if (pagesBase) {
-    originalApp = fs.readFileSync(appSource, 'utf8');
-    let patched = originalApp.replace('  Navigate,\n  Route,', '  HashRouter,\n  Navigate,\n  Route,');
+    patched = patched.replace('  Navigate,\n  Route,', '  HashRouter,\n  Navigate,\n  Route,');
     patched = patched.replace('component={props.router ?? Router}', 'component={props.router ?? HashRouter}');
-    if (patched === originalApp || !patched.includes('component={props.router ?? HashRouter}')) {
+    if (!patched.includes('component={props.router ?? HashRouter}')) {
       throw new Error('The pinned OpenCode router no longer matches the Pages adapter.');
     }
-    fs.writeFileSync(appSource, patched);
     buildArgs.push('--base=' + pagesBase);
   }
+  fs.writeFileSync(appSource, patched);
   run('bun', buildArgs, appDirectory);
 } finally {
   if (originalApp !== undefined) fs.writeFileSync(appSource, originalApp);
